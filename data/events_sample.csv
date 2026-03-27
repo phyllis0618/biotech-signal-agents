@@ -1,0 +1,4 @@
+signal,ret_1d,ret_1w,ret_1m
+long,0.02,0.05,0.10
+short,-0.01,-0.03,-0.04
+no_trade,0.04,0.08,0.12

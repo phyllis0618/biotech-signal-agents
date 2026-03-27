@@ -1,0 +1,50 @@
+{
+  "ticker": "XBI",
+  "company": "Amgen",
+  "final_signal": "long",
+  "confidence": 63,
+  "horizon": "1w",
+  "key_points": [
+    "Coordinator prompt policy loaded (612 chars).",
+    "Agent votes: bullish=3, bearish=0, neutral=2.",
+    "Confidence is penalized when agent views conflict."
+  ],
+  "risk_flags": [],
+  "evidence": [
+    {
+      "source": "openFDA",
+      "title": "FDA drug event",
+      "url": "https://api.fda.gov/drug/event.json",
+      "snippet": "{'safetyreportversion': '1', 'safetyreportid': '10007257', 'primarysourcecountry': 'US', 'transmissiondateformat': '102', 'transmissiondate': '20141002', 'reporttype': '1', 'serious': '1', 'seriousnessother': '1', 'receivedateformat': '102', 'receivedate': '20140312', 'receiptdateformat': '102', 're",
+      "published_at": null
+    },
+    {
+      "source": "ClinicalTrials.gov",
+      "title": "Trial status summary",
+      "url": "https://clinicaltrials.gov/",
+      "snippet": "completed=2, recruiting=0",
+      "published_at": null
+    },
+    {
+      "source": "openFDA",
+      "title": "Safety event reaction scan",
+      "url": "https://api.fda.gov/drug/event.json",
+      "snippet": "serious_mentions=0",
+      "published_at": null
+    },
+    {
+      "source": "Internal",
+      "title": "Impact scoring",
+      "url": "internal://market-impact",
+      "snippet": "score=1, trial=bullish, reg=neutral",
+      "published_at": null
+    },
+    {
+      "source": "Internal",
+      "title": "Signal vote",
+      "url": "internal://signal-vote",
+      "snippet": "hints=['bullish', 'neutral', 'bullish']",
+      "published_at": null
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "ticker": "XBI",
+  "company": "Amgen",
+  "final_signal": "no_trade",
+  "confidence": 49,
+  "horizon": "1w",
+  "key_points": [
+    "Coordinator prompt policy loaded (612 chars).",
+    "Agent votes: bullish=0, bearish=0, neutral=5.",
+    "Confidence is penalized when agent views conflict."
+  ],
+  "risk_flags": [
+    "No strong directional consensus."
+  ],
+  "evidence": [
+    {
+      "source": "ClinicalTrials.gov",
+      "title": "Trial status summary",
+      "url": "https://clinicaltrials.gov/",
+      "snippet": "completed=0, recruiting=0",
+      "published_at": null
+    },
+    {
+      "source": "openFDA",
+      "title": "Safety event reaction scan",
+      "url": "https://api.fda.gov/drug/event.json",
+      "snippet": "serious_mentions=0",
+      "published_at": null
+    },
+    {
+      "source": "Internal",
+      "title": "Impact scoring",
+      "url": "internal://market-impact",
+      "snippet": "score=0, trial=neutral, reg=neutral",
+      "published_at": null
+    },
+    {
+      "source": "Internal",
+      "title": "Signal vote",
+      "url": "internal://signal-vote",
+      "snippet": "hints=['neutral', 'neutral', 'neutral']",
+      "published_at": null
+    }
+  ]
+}
