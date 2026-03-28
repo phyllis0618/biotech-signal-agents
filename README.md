@@ -67,9 +67,79 @@ Run:
 python scripts/backtest_events.py --input-csv data/events.csv
 ```
 
+## Visualization frontend
+
+Run Streamlit dashboard (global universe view):
+
+```bash
+python -m streamlit run frontend/app.py
+```
+
+What the dashboard shows:
+
+- Agent stream flow graph (`ingestion -> ... -> coordinator`)
+- Per-ticker signal stream with confidence and evidence counts
+- Cross-ticker signal board (`long/short/no_trade`)
+- Market snapshot for universe tickers (use sidebar **Refresh market prices**; no auto full-page reload)
+- Intraday multi-ticker price chart (5m interval)
+- Signal history time series (`confidence` + mapped signal score)
+- Universe mode: run all biotech names from CSV and compare signal vs price move
+- Institutional scorecard (pipeline depth/execution, financing quality, composite score)
+- Pipeline monitor table for each ticker (`NCT ID`, phase, status, completion dates)
+- Catalyst calendar from trial phases/status/target dates + FDA AdCom/PDUFA notices
+- Event-window attribution table (`avg_change_pct`, `hit_rate`) by signal and confidence bucket
+- Risk-managed top long/short baskets with confidence and financing thresholds
+
+## Biotech universe run
+
+Prepare CSV with:
+
+- `ticker`
+- `company` (used for clinical/regulatory query)
+- `cash_runway_months`
+- `single_asset_exposure`
+
+Then run:
+
+```bash
+python -m scripts.run_biotech_universe --universe-csv data/biotech_universe_sample.csv
+```
+
+### Auto-build US biotech universe (recommended)
+
+Common data source used here: Nasdaq Stock Screener API.
+
+```bash
+python -m scripts.build_us_biotech_universe --output-csv data/biotech_universe_auto.csv
+python -m scripts.run_biotech_universe --universe-csv data/biotech_universe_auto.csv
+```
+
+Output:
+
+- `outputs/biotech_universe_latest.csv`
+- historical accumulation in `outputs/signal_history.jsonl`
+
+## Fundamental extraction (clinical / FDA / cash / deals / TAM)
+
+Five prompts live in `src/prompts/fundamental_prompts.py`. JSON schemas: `src/models/fundamental_schemas.py`.
+
+- Pulls latest **8-K** text from **SEC EDGAR** when possible (`src/connectors/sec_edgar.py`).
+- Runs **OpenAI JSON mode** when `OPENAI_API_KEY` is set, or **Ollama** locally when `USE_OLLAMA=1` (no cloud key).  
+  **Cursor’s in-editor model is not available to `python` / Streamlit** — use Ollama on your machine if you want zero API key.
+- Feeds the **`fundamental`** agent (`src/agents/fundamental_agent.py`), which aggregates into `signal_hint` and is blended in `signal_agent` (15% higher weight on fundamentals).
+
+Ollama is the default in `.env.example`. After cloning, copy once:
+
+```bash
+cp .env.example .env
+```
+
+If you already have a local `.env` with `USE_OLLAMA=1`, fundamental extraction uses **Ollama only** until you set `OPENAI_API_KEY`.
+
 ## Architecture
 
 - `src/agents/ingestion_agent.py`
+- `src/agents/fundamental_agent.py`
 - `src/agents/trial_progress_agent.py`
 - `src/agents/regulatory_agent.py`
 - `src/agents/market_impact_agent.py`

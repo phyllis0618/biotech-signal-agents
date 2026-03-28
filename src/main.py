@@ -2,12 +2,7 @@ from __future__ import annotations
 
 import argparse
 
-from src.agents.coordinator_agent import run_coordinator_agent
-from src.agents.ingestion_agent import run_ingestion_agent
-from src.agents.market_impact_agent import run_market_impact_agent
-from src.agents.regulatory_agent import run_regulatory_agent
-from src.agents.signal_agent import run_signal_agent
-from src.agents.trial_progress_agent import run_trial_progress_agent
+from src.pipeline import run_pipeline
 from src.utils.report_writer import final_report_to_pretty_json, write_report
 
 
@@ -31,21 +26,11 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-
-    ingestion_msg, raw_data = run_ingestion_agent(args.ticker, args.company)
-    trial_msg = run_trial_progress_agent(args.ticker, args.company, raw_data)
-    reg_msg = run_regulatory_agent(args.ticker, args.company, raw_data)
-    risk_profile = {
-        "cash_runway_months": args.cash_runway_months,
-        "single_asset_exposure": args.single_asset_exposure,
-    }
-    market_msg = run_market_impact_agent(
-        args.ticker, args.company, trial_msg, reg_msg, raw_data, risk_profile
-    )
-    signal_msg = run_signal_agent(args.ticker, args.company, trial_msg, reg_msg, market_msg)
-
-    report = run_coordinator_agent(
-        [ingestion_msg, trial_msg, reg_msg, market_msg, signal_msg]
+    _, report, _ = run_pipeline(
+        args.ticker,
+        args.company,
+        cash_runway_months=args.cash_runway_months,
+        single_asset_exposure=args.single_asset_exposure,
     )
     path = write_report(report)
 

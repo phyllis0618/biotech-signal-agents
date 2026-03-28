@@ -1,0 +1,9 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+outputs/*.json
+outputs/*.csv
+outputs/signal_history.jsonl
+data/biotech_universe_auto.csv
+.DS_Store

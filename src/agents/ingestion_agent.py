@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from src.connectors.clinicaltrials import fetch_clinical_trials
+from src.connectors.fda_calendar import fetch_fda_adcom_calendar, fetch_fda_pdufa_mentions
 from src.connectors.fda import fetch_fda_drug_events
 from src.connectors.pureglobal import fetch_pureglobal_snapshot
 from src.models.messages import AgentMessage, Evidence
@@ -8,6 +9,7 @@ from src.models.messages import AgentMessage, Evidence
 
 def run_ingestion_agent(ticker: str, company: str) -> tuple[AgentMessage, dict]:
     fda_events = []
+    fda_calendar_events = []
     ctgov_studies = []
     pureglobal_data = {"type": "none", "payload": ""}
 
@@ -16,6 +18,10 @@ def run_ingestion_agent(ticker: str, company: str) -> tuple[AgentMessage, dict]:
         fda_events = fetch_fda_drug_events(company=company, limit=5)
     except Exception:
         fda_events = []
+    try:
+        fda_calendar_events = fetch_fda_adcom_calendar(limit=15) + fetch_fda_pdufa_mentions(limit=15)
+    except Exception:
+        fda_calendar_events = []
     try:
         ctgov_studies = fetch_clinical_trials(company=company, page_size=5)
     except Exception:
@@ -45,6 +51,16 @@ def run_ingestion_agent(ticker: str, company: str) -> tuple[AgentMessage, dict]:
             )
         )
 
+    if fda_calendar_events:
+        evidence.append(
+            Evidence(
+                source="FDA Calendar",
+                title="FDA AdCom/PDUFA notices",
+                url=fda_calendar_events[0].get("url", "https://www.federalregister.gov/"),
+                snippet=str(fda_calendar_events[0])[:300],
+            )
+        )
+
     if pureglobal_data.get("payload"):
         evidence.append(
             Evidence(
@@ -68,6 +84,7 @@ def run_ingestion_agent(ticker: str, company: str) -> tuple[AgentMessage, dict]:
 
     raw_data = {
         "fda_events": fda_events,
+        "fda_calendar_events": fda_calendar_events,
         "ctgov_studies": ctgov_studies,
         "pureglobal_data": pureglobal_data,
         "pureglobal_metrics": pureglobal_data.get("metrics", {}),

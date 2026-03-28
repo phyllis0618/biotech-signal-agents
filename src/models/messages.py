@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 AgentName = Literal[
     "ingestion",
+    "fundamental",
     "trial_progress",
     "regulatory",
     "market_impact",

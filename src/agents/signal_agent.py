@@ -9,9 +9,20 @@ def run_signal_agent(
     trial_msg: AgentMessage,
     reg_msg: AgentMessage,
     market_msg: AgentMessage,
+    fundamental_msg: AgentMessage,
 ) -> AgentMessage:
-    hints = [trial_msg.signal_hint, reg_msg.signal_hint, market_msg.signal_hint]
-    weights = [trial_msg.confidence, reg_msg.confidence, market_msg.confidence]
+    hints = [
+        trial_msg.signal_hint,
+        reg_msg.signal_hint,
+        market_msg.signal_hint,
+        fundamental_msg.signal_hint,
+    ]
+    weights = [
+        trial_msg.confidence,
+        reg_msg.confidence,
+        market_msg.confidence,
+        int(fundamental_msg.confidence * 1.15),
+    ]
     bullish = hints.count("bullish")
     bearish = hints.count("bearish")
     weighted_score = 0
@@ -34,7 +45,10 @@ def run_signal_agent(
         agent="signal",
         ticker=ticker,
         company=company,
-        summary=f"Signal vote bullish={bullish}, bearish={bearish}, weighted_score={weighted_score}.",
+        summary=(
+            f"Signal vote bullish={bullish}, bearish={bearish}, weighted_score={weighted_score} "
+            f"(includes fundamentals)."
+        ),
         confidence=min(int(confidence), 88),
         signal_hint=hint,
         evidence=[

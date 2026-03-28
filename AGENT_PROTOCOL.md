@@ -2,7 +2,7 @@
 
 All agents emit `AgentMessage` objects with these required fields:
 
-- `agent`: one of `ingestion`, `trial_progress`, `regulatory`, `market_impact`, `signal`, `coordinator`
+- `agent`: one of `ingestion`, `fundamental`, `trial_progress`, `regulatory`, `market_impact`, `signal`, `coordinator`
 - `ticker`: target symbol
 - `company`: target company string
 - `summary`: short plain-language summary
@@ -23,6 +23,10 @@ All agents emit `AgentMessage` objects with these required fields:
    - `risk_flags`
    - `evidence`
 5. Incorporate event-window context (e.g., recent 180-day updates) and company risk context before final directional output.
+
+## Fundamental agent (`fundamental`)
+
+When `OPENAI_API_KEY` is set, the `fundamental` agent runs five structured extractions (clinical readouts, regulatory catalysts, cash runway, deal flow, TAM) against SEC 8-K text plus metadata. Without a key, schemas default to empty and the hint stays neutral.
 
 ## Extension points
 

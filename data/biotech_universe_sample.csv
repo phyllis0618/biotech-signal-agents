@@ -1,0 +1,11 @@
+ticker,company,cash_runway_months,single_asset_exposure
+AMGN,Amgen,24,false
+REGN,Regeneron Pharmaceuticals,24,false
+VRTX,Vertex Pharmaceuticals,24,false
+BMRN,BioMarin Pharmaceutical,18,false
+EXEL,Exelixis,18,false
+SANA,Sana Biotechnology,10,true
+CRSP,CRISPR Therapeutics,14,true
+NTLA,Intellia Therapeutics,12,true
+BEAM,Beam Therapeutics,12,true
+XBI,SPDR S&P Biotech ETF,18,false
