@@ -1,0 +1,4 @@
+ticker,company,cash_runway_months,single_asset_exposure
+AMGN,Amgen Inc.,24,false
+GILD,Gilead Sciences Inc.,24,false
+XBI,SPDR S&P Biotech ETF,18,false

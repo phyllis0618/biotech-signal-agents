@@ -7,7 +7,9 @@ from src.agents.fundamental_agent import run_fundamental_agent
 from src.agents.ingestion_agent import run_ingestion_agent
 from src.agents.market_impact_agent import run_market_impact_agent
 from src.agents.regulatory_agent import run_regulatory_agent
+from src.agents.rl_policy_agent import run_rl_policy_agent
 from src.agents.signal_agent import run_signal_agent
+from src.agents.trader_review_agent import run_trader_review_agent
 from src.agents.trial_progress_agent import run_trial_progress_agent
 from src.models.messages import AgentMessage, FinalReport
 
@@ -48,5 +50,8 @@ def run_pipeline(
         market_msg,
         signal_msg,
     ]
-    report = run_coordinator_agent(agent_messages)
-    return agent_messages, report, raw_data
+    coordinator_report = run_coordinator_agent(agent_messages)
+    rl_msg, report_after_rl = run_rl_policy_agent(agent_messages, coordinator_report)
+    trader_msg, final_report = run_trader_review_agent(report_after_rl, rl_msg)
+    full_messages = agent_messages + [rl_msg, trader_msg]
+    return full_messages, final_report, raw_data

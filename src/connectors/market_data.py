@@ -70,3 +70,32 @@ def fetch_yahoo_intraday_series(ticker: str, interval: str = "5m", range_: str =
         return rows
     except Exception:
         return []
+
+
+def fetch_yahoo_daily_bars(ticker: str, range_: str = "1mo", max_rows: int = 10) -> List[Dict]:
+    """
+    Daily OHLC closes from Yahoo chart API (last up to `max_rows` trading days).
+    """
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+    params = {"interval": "1d", "range": range_}
+    try:
+        data = get_json(url, params=params, timeout=15)
+        result = data.get("chart", {}).get("result", [{}])[0]
+        timestamps = result.get("timestamp", [])
+        quote = result.get("indicators", {}).get("quote", [{}])[0]
+        closes = quote.get("close", [])
+        rows: List[Dict] = []
+        for ts, close in zip(timestamps, closes):
+            if close is None:
+                continue
+            rows.append(
+                {
+                    "date": datetime.fromtimestamp(int(ts), tz=timezone.utc).date().isoformat(),
+                    "close": float(close),
+                }
+            )
+        if max_rows and len(rows) > max_rows:
+            rows = rows[-max_rows:]
+        return rows
+    except Exception:
+        return []

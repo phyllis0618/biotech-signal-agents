@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List
+
+# Allow `streamlit run frontend/app.py` from any cwd (repo root must be on PYTHONPATH).
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 import pandas as pd
 import streamlit as st
@@ -18,18 +25,28 @@ from src.analytics.institutional_score import compute_institutional_scorecard
 from src.analytics.pipeline_snapshot import build_pipeline_table_rows, summarize_pipeline_strength
 from src.connectors.market_data import fetch_yahoo_intraday_series, fetch_yahoo_snapshots
 from src.pipeline import run_pipeline
+from src.portfolio_pipeline import run_portfolio_pm_cycle
+from src.reporting.factor_trace import build_factor_trace
 from src.universe import load_biotech_universe
 from src.utils.history_store import append_signal_history, read_signal_history
 
 
 st.set_page_config(page_title="Biotech Signal Dashboard", layout="wide")
 st.title("Biotech Signal Dashboard")
-st.caption("Universe-level biotech signals + catalyst watchlists (no auto page refresh; scroll stays put.)")
+st.caption(
+    "Universe-level biotech signals + catalyst watchlists. "
+    "Trades are **pending trader review** (RL proposes; humans approve). "
+    "No auto page refresh."
+)
 
 with st.sidebar:
     st.header("Settings")
     mode = "Biotech Universe CSV"
-    universe_csv = st.text_input("Universe CSV path", "data/biotech_universe_sample.csv")
+    universe_csv = st.text_input(
+        "Universe CSV path",
+        "data/demo_biotech_frontend.csv",
+        help="Run `python3 scripts/run_demo_for_frontend.py` once to generate this file + PM JSON.",
+    )
     cash_runway_months = st.slider("Cash runway (months)", 3, 36, 18)
     single_asset_exposure = st.checkbox("Single-asset exposure", value=False)
     st.markdown("### Basket Risk Controls")
@@ -38,6 +55,10 @@ with st.sidebar:
     min_financing_quality = st.slider("Min financing quality for LONG", 0, 100, 45)
     max_financing_quality_for_short = st.slider("Max financing quality for SHORT", 0, 100, 60)
     basket_top_n = st.slider("Top N per basket", 3, 25, 10)
+    use_agentic_pm = st.checkbox(
+        "Agentic PM layer (ReasoningManager + critic + VaR gate + approval queue)",
+        value=False,
+    )
     st.caption("Tip: use **Refresh** to reload prices only; **Run Signal Stream** recomputes pipeline.")
     refresh_prices = st.button("Refresh market prices")
     run_btn = st.button("Run Signal Stream")
@@ -116,9 +137,29 @@ digraph G {
   regulatory -> market_impact;
   market_impact -> signal;
   signal -> coordinator;
+  coordinator -> rl_policy;
+  rl_policy -> trader_review;
 }
 """
 )
+
+with st.expander("How agents interact · Human-in-the-loop · RL layers", expanded=False):
+    st.markdown(
+        """
+**Data flow (overview)**  
+`Data sources → ingestion → sub-agents (trial / regulatory / fundamental / market) → weighted signal → coordinator draft`  
+→ **`rl_policy` (tabular Q, learns from trader feedback)** → **`trader_review` (no execution until approved)**
+
+**Human intervention (execution gate)**  
+- Each proposal has `trade_id` + `execution_status=pending_trader_review`.  
+- Record approve / reject / defer + notes via `scripts/apply_trader_feedback.py` (updates `outputs/rl_qtable.json`).  
+- The system **does not** connect to brokers or place orders automatically.
+
+**Two RL layers (do not confuse them)**  
+1. **Tabular Q (in pipeline)**: After the coordinator, discrete `long/short/no_trade`; reward comes from trader decisions.  
+2. **PPO (separate env)**: Position sizing in `BiotechTradingEnv`; train with `scripts/train_ppo_demo`, joint research demo with `scripts/run_joint_backtest.py`.
+        """
+    )
 
 if run_btn:
     report_rows = []
@@ -131,12 +172,20 @@ if run_btn:
     for item in run_list:
         ticker = item["ticker"]
         company = item["company"]
-        messages, report, raw_data = run_pipeline(
-            ticker=ticker,
-            company=company,
-            cash_runway_months=item["cash_runway_months"],
-            single_asset_exposure=item["single_asset_exposure"],
-        )
+        if use_agentic_pm:
+            messages, report, raw_data, _rs = run_portfolio_pm_cycle(
+                ticker=ticker,
+                company=company,
+                cash_runway_months=item["cash_runway_months"],
+                single_asset_exposure=item["single_asset_exposure"],
+            )
+        else:
+            messages, report, raw_data = run_pipeline(
+                ticker=ticker,
+                company=company,
+                cash_runway_months=item["cash_runway_months"],
+                single_asset_exposure=item["single_asset_exposure"],
+            )
         snap_row = next((s for s in snapshots if s["ticker"] == ticker), {"change_pct": 0.0, "price": 0.0})
         per_ticker_detail.append(
             {
@@ -153,6 +202,10 @@ if run_btn:
                 "company": company,
                 "final_signal": report.final_signal,
                 "confidence": report.confidence,
+                "coordinator_signal": report.coordinator_signal,
+                "rl_action": report.rl_action,
+                "trade_id": report.trade_id,
+                "execution_status": report.execution_status,
                 "horizon": report.horizon,
                 "risk_flags": "; ".join(report.risk_flags),
                 "as_of": datetime.utcnow().isoformat(),
@@ -205,6 +258,52 @@ if run_btn:
     st.subheader("Cross-Ticker Signal Board")
     board_df = pd.DataFrame(report_rows)
     st.dataframe(board_df, use_container_width=True, hide_index=True)
+
+    st.subheader("Factor interaction trace")
+    for d in per_ticker_detail:
+        tr = build_factor_trace(d["messages"], d["report"])
+        st.markdown(f"#### `{d['ticker']}` — agent → coordinator → RL → trader")
+        st.dataframe(
+            pd.DataFrame(tr["factor_agent_table"]),
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.dataframe(
+            pd.DataFrame(tr["interaction_edges"]),
+            use_container_width=True,
+            hide_index=True,
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**Snapshot (coordinator vs RL)**")
+            st.json(tr["final_report_snapshot"])
+        with c2:
+            st.markdown("**Human: copy to terminal (updates Q-table after approval)**")
+            st.code(tr["human_intervention"].get("example_cli", ""), language="bash")
+        with st.expander(f"RL notes ({d['ticker']})", expanded=False):
+            st.json(tr["reinforcement_learning"])
+
+    if use_agentic_pm:
+        st.subheader("Agentic PM — vertical reasoning log")
+        st.caption(
+            "Planning → Tool use (SEC / CT.gov / price proxy) → Memory retrieval → "
+            "Critic counter-thesis → Decision. Trades enqueue to `outputs/approval_queue.jsonl`."
+        )
+        for d in per_ticker_detail:
+            r = d["report"]
+            st.markdown(f"#### `{d['ticker']}` — {r.system_tag}")
+            st.progress(min(100, max(0, int(r.confidence))) / 100.0)
+            st.caption(f"Alpha confidence meter — {r.confidence}%")
+            if r.counter_thesis:
+                st.markdown("**Counter-thesis (pre-execution)**")
+                st.info(r.counter_thesis)
+            st.markdown(f"**Risk / VaR / drawdown snapshot:** {r.risk_status}")
+            st.markdown(f"**PyTorch PM aggregator:** {r.pm_weights_preview}")
+            if r.reasoning_trace:
+                for step in r.reasoning_trace:
+                    ph = step.get("phase", "")
+                    st.markdown(f"**{ph}** — {step.get('title', '')}")
+                    st.caption(str(step.get("detail", ""))[:2000])
 
     catalyst_deduped = dedupe_fda_calendar_rows(catalyst_rows)
     watch = split_priority_watchlists(catalyst_deduped)

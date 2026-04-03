@@ -5,5 +5,9 @@ __pycache__/
 outputs/*.json
 outputs/*.csv
 outputs/signal_history.jsonl
+outputs/rl_qtable.json
+outputs/trader_feedback.jsonl
+outputs/*.jsonl
+outputs/chroma_db/
 data/biotech_universe_auto.csv
 .DS_Store

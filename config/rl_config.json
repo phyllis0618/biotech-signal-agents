@@ -1,0 +1,9 @@
+{
+  "learning_rate": 0.0003,
+  "entropy_coef": 0.05,
+  "gamma": 0.99,
+  "reward_clip": 2.0,
+  "ppo_episodes": 64,
+  "max_env_steps": 50,
+  "comment": "Entropy mitigates overconfidence on binary biotech catalysts; reward_clip limits tail-risk feedback."
+}

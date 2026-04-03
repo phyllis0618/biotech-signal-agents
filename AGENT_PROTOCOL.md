@@ -2,7 +2,7 @@
 
 All agents emit `AgentMessage` objects with these required fields:
 
-- `agent`: one of `ingestion`, `fundamental`, `trial_progress`, `regulatory`, `market_impact`, `signal`, `coordinator`
+- `agent`: one of `ingestion`, `fundamental`, `trial_progress`, `regulatory`, `market_impact`, `signal`, `coordinator`, `rl_policy`, `trader_review`
 - `ticker`: target symbol
 - `company`: target company string
 - `summary`: short plain-language summary
@@ -23,6 +23,14 @@ All agents emit `AgentMessage` objects with these required fields:
    - `risk_flags`
    - `evidence`
 5. Incorporate event-window context (e.g., recent 180-day updates) and company risk context before final directional output.
+
+## RL policy (`rl_policy`)
+
+After the coordinator draft, a **tabular Q-learning** policy selects among `long | short | no_trade` per discretized state. Q-values persist under `outputs/rl_qtable.json` and update when traders submit feedback via `scripts/apply_trader_feedback.py`.
+
+## Trader review gate (`trader_review`)
+
+**No automated execution.** Every run gets `execution_status=pending_trader_review` and a unique `trade_id` until a trader records a decision (approved / rejected / deferred) and optional guidance.
 
 ## Fundamental agent (`fundamental`)
 

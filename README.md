@@ -136,6 +136,69 @@ cp .env.example .env
 
 If you already have a local `.env` with `USE_OLLAMA=1`, fundamental extraction uses **Ollama only** until you set `OPENAI_API_KEY`.
 
+## Phase 1 — Agentic Research Framework (Plan → Research → Reflect)
+
+Three sub-agents (see `src/agentic_research/` + `src/agents/research_manager.py`):
+
+| Agent | Role |
+|-------|------|
+| **DataExtractor** | ClinicalTrials.gov + FDA path (openFDA + Federal Register headlines) |
+| **FinancialAnalyst** | SEC 8-K text heuristics for cash / runway |
+| **CriticAgent** | Reflection: lists contrarian risks and bias flags |
+
+Workflow (LangGraph when `langgraph` is installed, else sequential FSM):
+
+`Input → Plan → Research → Reflect → Final Alpha Signal`
+
+```bash
+python -m scripts.run_agentic_research --ticker XBI --company "SPDR S&P Biotech ETF"
+```
+
+## Phase 2 — RL sizing (Gym env + PPO)
+
+- **Environment** `src/rl/trading_env.py`: observations `[Signal_Strength, Sector_Vol, Runway, Days_to_FDA]` (normalized), actions `{Hold, +5%, +10%, Sell All}`.
+- **Reward** `src/rl/reward.py`: `PnL - λ·MaxDrawdown` plus helpers for Sharpe-like / vol penalties during “events”.
+- **PPO** `src/rl/ppo_agent.py`: PyTorch actor–critic training demo.
+
+```bash
+python -m scripts.train_ppo_demo
+```
+
+**Research → Env (joint backtest demo)** — maps `final_alpha.signal_strength`, runway, and XBI-based vol proxy into `BiotechTradingEnv.reset(options=...)`:
+
+```bash
+python -m scripts.run_joint_backtest --ticker AMGN --company Amgen --policy buy_bias
+```
+
+See `src/rl/research_bridge.py` (`env_options_from_research`, `run_joint_rollout`). Swap in `PPOAgent.act(obs)` for the stub policy when your model is trained.
+
+### 10-day Yahoo daily backtest
+
+Uses the **last ~10 trading days** of daily closes + **one current pipeline signal** applied as fixed long/short/flat to each daily return (vs buy-and-hold). Writes `outputs/backtest_10d_{TICKER}.csv`.
+
+```bash
+python -m scripts.backtest_10d --ticker AMGN --company Amgen --days 10
+```
+
+## Reinforcement learning + trader review
+
+Pipeline order: `… → coordinator → rl_policy → trader_review`.
+
+- **RL** (`src/trading/q_learning.py`, `src/agents/rl_policy_agent.py`): tabular Q over `(signal|confidence_bucket)`; persists `outputs/rl_qtable.json`.
+- **Trader gate** (`src/agents/trader_review_agent.py`): every proposal gets `trade_id` and `execution_status=pending_trader_review` — **no auto-execution**.
+- Record desk decisions (updates RL):
+
+```bash
+python -m scripts.apply_trader_feedback \
+  --trade-id "<trade_id from report>" \
+  --ticker AMGN \
+  --coordinator-signal no_trade \
+  --coordinator-confidence 49 \
+  --rl-action no_trade \
+  --decision approved \
+  --guidance "Size small; watch PDUFA"
+```
+
 ## Architecture
 
 - `src/agents/ingestion_agent.py`
@@ -145,6 +208,9 @@ If you already have a local `.env` with `USE_OLLAMA=1`, fundamental extraction u
 - `src/agents/market_impact_agent.py`
 - `src/agents/signal_agent.py`
 - `src/agents/coordinator_agent.py`
+- `src/agents/rl_policy_agent.py`
+- `src/agents/trader_review_agent.py`
+- `src/trading/q_learning.py`
 
 Each agent emits a normalized message (`AgentMessage`) and the coordinator composes the final report.
 
