@@ -52,12 +52,19 @@ def enrich_report_with_pm(
     )
 
 
+def _json_safe(obj: Any) -> Any:
+    return json.loads(json.dumps(obj, default=str))
+
+
 def write_pm_dashboard_state(
     report: FinalReport,
     rs: ReasoningState,
     *,
     ppo_episode_returns_tail: Optional[List[float]] = None,
     batch_runs: Optional[List[Dict[str, Any]]] = None,
+    universe_snapshot: Optional[List[Dict[str, Any]]] = None,
+    catalyst_calendar: Optional[List[Dict[str, Any]]] = None,
+    institutional_scorecard: Optional[List[Dict[str, Any]]] = None,
 ) -> Path:
     """JSON for Next.js PM dashboard (`web/app/api/state`)."""
     out = _project_root() / "outputs" / "pm_dashboard_state.json"
@@ -93,6 +100,12 @@ def write_pm_dashboard_state(
     if batch_runs is not None:
         payload["batch_runs"] = batch_runs
         payload["batch_note"] = "Multi-ticker demo; detail timeline is from the primary ticker row above."
+    if universe_snapshot is not None:
+        payload["universe"] = _json_safe(universe_snapshot)
+    if catalyst_calendar is not None:
+        payload["catalyst_calendar"] = _json_safe(catalyst_calendar)
+    if institutional_scorecard is not None:
+        payload["institutional_scorecard"] = _json_safe(institutional_scorecard)
     out.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
     return out
 

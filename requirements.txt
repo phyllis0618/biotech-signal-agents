@@ -1,7 +1,6 @@
 requests
 python-dotenv
 pydantic
-streamlit
 pandas
 openai>=1.40.0
 langgraph>=0.2.0
