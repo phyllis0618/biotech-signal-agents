@@ -13,7 +13,8 @@ def run_rl_policy_agent(
 ) -> Tuple[AgentMessage, FinalReport]:
     """
     Tabular Q-policy over (signal bucket) states. Refines coordinator output.
-    Learns from trader feedback via outputs/rl_qtable.json updates.
+    Base Q table: train with scripts/train_tabular_q_overnight.py (backtest), or trader feedback
+    via outputs/rl_qtable.json updates (apply_trader_feedback / sim drill).
     """
     pre_sig = coordinator_report.final_signal
     pre_conf = coordinator_report.confidence

@@ -56,6 +56,87 @@ def _json_safe(obj: Any) -> Any:
     return json.loads(json.dumps(obj, default=str))
 
 
+_DASHBOARD_SLICE_KEYS = (
+    "ticker",
+    "company",
+    "confidence",
+    "final_signal",
+    "counter_thesis",
+    "pm_weights_preview",
+    "risk_status",
+    "reasoning_timeline",
+    "rl_deployed",
+    "hitl",
+)
+
+
+def dashboard_slice_for_report(report: FinalReport, rs: ReasoningState) -> Dict[str, Any]:
+    """Per-ticker snapshot for `by_ticker` in pm_dashboard_state.json (Next.js merges by workspace ticker)."""
+    return {
+        "ticker": report.ticker,
+        "company": report.company,
+        "confidence": report.confidence,
+        "final_signal": report.final_signal,
+        "counter_thesis": report.counter_thesis,
+        "pm_weights_preview": report.pm_weights_preview,
+        "risk_status": report.risk_status,
+        "reasoning_timeline": rs.get("timeline") or [],
+        "rl_deployed": {
+            "state_key": getattr(report, "rl_state", "") or "",
+            "policy_action": getattr(report, "rl_action", "") or "",
+            "final_signal_after_pipeline": report.final_signal,
+            "source_table": "outputs/rl_qtable.json",
+            "forward_path": "run_pipeline → run_rl_policy_agent → trader_review",
+        },
+        "hitl": {
+            "trade_id": report.trade_id,
+            "execution_status": report.execution_status,
+            "approval_required": True,
+        },
+    }
+
+
+def _apply_dashboard_slice(payload: Dict[str, Any], sl: Dict[str, Any]) -> None:
+    for k in _DASHBOARD_SLICE_KEYS:
+        if k in sl:
+            payload[k] = sl[k]
+
+
+def _load_tabular_rl_training_snapshot() -> Dict[str, Any]:
+    """
+    Surfaces overnight TD Q backtest (`outputs/overnight_train_report.json`) for the dashboard.
+    Forward execution uses the same `outputs/rl_qtable.json` via `run_rl_policy_agent`.
+    """
+    root = _project_root()
+    report_path = root / "outputs" / "overnight_train_report.json"
+    q_path = root / "outputs" / "rl_qtable.json"
+    snap: Dict[str, Any] = {
+        "flow_summary": (
+            "100d Yahoo: TD Q on first 70 return days → outputs/rl_qtable.json (or rl_qtable_<TICKER>.json with "
+            "--multi-demo). overnight_train_report.json may include by_ticker for the same three symbols as the dashboard. "
+            "PnL OOS = last 30 real days; live: coordinator → rl_policy_agent → trader_review → execution."
+        ),
+        "train_script": "scripts/train_tabular_q_overnight.py",
+        "report_file": "outputs/overnight_train_report.json",
+        "q_table_file": "outputs/rl_qtable.json",
+        "report_available": report_path.exists(),
+        "q_table_available": q_path.exists(),
+    }
+    if report_path.exists():
+        try:
+            snap["overnight_report"] = json.loads(report_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            snap["overnight_report"] = None
+            snap["report_load_error"] = str(e)
+    if q_path.exists():
+        try:
+            q = json.loads(q_path.read_text(encoding="utf-8"))
+            snap["q_state_count"] = len(q) if isinstance(q, dict) else 0
+        except Exception:
+            snap["q_state_count"] = None
+    return snap
+
+
 def write_pm_dashboard_state(
     report: FinalReport,
     rs: ReasoningState,
@@ -65,6 +146,8 @@ def write_pm_dashboard_state(
     universe_snapshot: Optional[List[Dict[str, Any]]] = None,
     catalyst_calendar: Optional[List[Dict[str, Any]]] = None,
     institutional_scorecard: Optional[List[Dict[str, Any]]] = None,
+    by_ticker: Optional[Dict[str, Dict[str, Any]]] = None,
+    default_ticker: Optional[str] = None,
 ) -> Path:
     """JSON for Next.js PM dashboard (`web/app/api/state`)."""
     out = _project_root() / "outputs" / "pm_dashboard_state.json"
@@ -89,7 +172,19 @@ def write_pm_dashboard_state(
         "rl_training": {
             "status": "idle",
             "last_episode_returns_tail": ppo_episode_returns_tail or [],
-            "note": "Run `python -m scripts.train_ppo_demo` to refresh PPO metrics.",
+            "note": (
+                "PPO (Gym, config/rl_config.json) is separate from tabular Q. "
+                "Deployed tabular policy: train with scripts/train_tabular_q_overnight.py → rl_qtable.json; "
+                "see tabular_rl_training on this dashboard."
+            ),
+        },
+        "tabular_rl_training": _load_tabular_rl_training_snapshot(),
+        "rl_deployed": {
+            "state_key": getattr(report, "rl_state", "") or "",
+            "policy_action": getattr(report, "rl_action", "") or "",
+            "final_signal_after_pipeline": report.final_signal,
+            "source_table": "outputs/rl_qtable.json",
+            "forward_path": "run_pipeline → run_rl_policy_agent → trader_review",
         },
         "hitl": {
             "trade_id": report.trade_id,
@@ -97,9 +192,22 @@ def write_pm_dashboard_state(
             "approval_required": True,
         },
     }
+    if by_ticker:
+        payload["by_ticker"] = by_ticker
+        dt = default_ticker
+        if not dt and by_ticker:
+            dt = next(iter(by_ticker.keys()))
+        if dt and dt in by_ticker:
+            payload["default_ticker"] = dt
+            _apply_dashboard_slice(payload, by_ticker[dt])
+        payload["batch_note"] = (
+            "Multi-ticker demo: each symbol has its own Agentic timeline in `by_ticker`; "
+            "top-level fields mirror `default_ticker` (first successful in demo order when set)."
+        )
     if batch_runs is not None:
         payload["batch_runs"] = batch_runs
-        payload["batch_note"] = "Multi-ticker demo; detail timeline is from the primary ticker row above."
+        if not by_ticker:
+            payload["batch_note"] = "Multi-ticker demo; detail timeline is from the primary ticker row above."
     if universe_snapshot is not None:
         payload["universe"] = _json_safe(universe_snapshot)
     if catalyst_calendar is not None:

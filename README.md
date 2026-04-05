@@ -48,7 +48,38 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:3001**.
+Open **http://localhost:3002** (port set in `web/package.json`; change if busy).
+
+### Step 4 (optional) — 100d window: 70d train + 30d real OOS PnL
+
+**What it does:** Last **100** daily returns from Yahoo: **TD tabular Q trains** on the first **70** days; **in-sample BT** is that same 70d segment; **OOS forward** is the last **30** real return days (no simulated prices). Optional `--loop` polls Yahoo and appends when a new daily bar appears. Produces `outputs/pnl_simulation_state.json`; the Next app reads it via `/api/pnl` (polls every 3s).
+
+From **repo root** (recommended):
+
+```bash
+python3 scripts/simulate_strategy_pnl.py
+python3 scripts/simulate_strategy_pnl.py --ticker XBI --total-days 100 --train-days 70 --oos-days 30
+python3 scripts/simulate_strategy_pnl.py --loop --interval 60
+```
+
+From **`web/`** (wrapper + npm):
+
+```bash
+python3 scripts/simulate_strategy_pnl.py
+npm run sim:pnl
+npm run sim:pnl:loop
+```
+
+This is **not** the multi-agent alpha — it is a **quant-style toy** for charting PnL mechanics. For agent signals, use Step 2.
+
+### Step 5 — Interactive walk-forward (30 OOS days × you decide)
+
+**What it does:** Uses the **same 100-day Yahoo window** as Step 4 (70 train + 30 forward / OOS). The drill replays only the **last 30 sessions** (OOS segment). Each step shows momentum→coordinator-style signal, **tabular Q** suggests an action (ε-greedy; **locked** until you change ε or re-roll). You **Approve / Reject / Defer** like trader review: Q updates (`reward` ±1 / 0); **Approve** also moves paper equity by `RL action × daily return`.
+
+- **UI:** open **http://localhost:3002/sim** (after `npm run dev` in `web/`).
+- **Or CLI first:** `python3 scripts/build_interactive_sim.py --total-days 100 --oos-days 30` → writes `outputs/interactive_sim.json`; the page reads/writes it via `/api/sim`.
+
+**RL inputs on that page:** sliders for **ε**, **tabular Q learning rate**, **γ** (reserved). This is the **same tabular Q** semantics as `src/trading/q_learning.py`, not the PPO `rl_config.json` (that’s the Gym env).
 
 ---
 
@@ -65,6 +96,7 @@ Open **http://localhost:3001**.
 | **Counter-thesis / Risk / PM** | Critic text, VaR-style line, PM weight preview. |
 | **RL hyperparameters** | From `config/rl_config.json`. |
 | **HITL** | `trade_id` and review status (no auto-execution). |
+| **100d + paper PnL** | Top section: backtest return / forward sim / optional live loop from Step 4. |
 
 ---
 

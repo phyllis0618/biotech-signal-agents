@@ -27,7 +27,7 @@ from src.analytics.catalyst import build_catalyst_rows, dedupe_fda_calendar_rows
 from src.analytics.pipeline_snapshot import summarize_pipeline_strength
 from src.analytics.institutional_score import compute_institutional_scorecard
 from src.connectors.market_data import fetch_yahoo_snapshots
-from src.portfolio_pipeline import run_portfolio_pm_cycle, write_pm_dashboard_state
+from src.portfolio_pipeline import dashboard_slice_for_report, run_portfolio_pm_cycle, write_pm_dashboard_state
 
 # Common liquid biotech + XBI — no CLI args (3 names keeps runtime reasonable).
 DEMO_UNIVERSE = [
@@ -49,6 +49,7 @@ def main() -> None:
     batch_runs: List[Dict[str, Any]] = []
     catalyst_rows: List[Dict[str, Any]] = []
     scorecard_rows: List[Dict[str, Any]] = []
+    by_ticker: Dict[str, Dict[str, Any]] = {}
     last_report = None
     last_rs = None
 
@@ -102,6 +103,7 @@ def main() -> None:
                     **sc,
                 }
             )
+            by_ticker[report.ticker] = dashboard_slice_for_report(report, rs)
             last_report, last_rs = report, rs
         except Exception as e:
             batch_runs.append({"ticker": ticker, "error": str(e)})
@@ -126,6 +128,12 @@ def main() -> None:
             }
         )
 
+    default_ticker: str | None = None
+    for t, _, _, _ in DEMO_UNIVERSE:
+        if t in by_ticker:
+            default_ticker = t
+            break
+
     if last_report is not None and last_rs is not None:
         path = write_pm_dashboard_state(
             last_report,
@@ -134,13 +142,20 @@ def main() -> None:
             universe_snapshot=universe_snapshot,
             catalyst_calendar=catalyst_deduped,
             institutional_scorecard=scorecard_rows,
+            by_ticker=by_ticker if by_ticker else None,
+            default_ticker=default_ticker,
         )
         print(f"\nDashboard JSON: {path}")
-        print("Primary timeline in JSON is from last successful ticker:", last_report.ticker)
+        print(
+            "Workspace default ticker (first successful in demo order):",
+            default_ticker or last_report.ticker,
+            "| by_ticker keys:",
+            list(by_ticker.keys()),
+        )
     else:
         print("No successful runs — check network / API keys.")
 
-    print("\nNext.js dashboard:  cd web && npm install && npm run dev  →  http://localhost:3001")
+    print("\nNext.js dashboard:  cd web && npm install && npm run dev  →  http://localhost:3002")
 
 
 if __name__ == "__main__":
